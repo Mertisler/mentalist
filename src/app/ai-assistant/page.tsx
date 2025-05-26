@@ -19,6 +19,15 @@ interface Message {
   isFavorite?: boolean;
 }
 
+// Kod bloğu ve markdown temizleyici fonksiyon
+function cleanMarkdown(text: string) {
+  return text
+    .replace(/^```[a-zA-Z]*\n?/, '') // baştaki ``` veya ```markdown
+    .replace(/```$/, '')              // sondaki ```
+    .replace(/^markdown\s*/i, '')    // baştaki 'markdown' kelimesi
+    .trim();
+}
+
 export default function AiAssistantPage() {
   const [user, setUser] = useState<User | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
@@ -209,7 +218,7 @@ export default function AiAssistantPage() {
               <div className={`relative flex items-center group`}>
                 <div className={`rounded-2xl px-5 py-3 w-fit min-w-[120px] max-w-[80vw] md:max-w-[60%] shadow-xl text-base font-semibold break-words ${msg.role === "user" ? "bg-gradient-to-br from-indigo-500 via-blue-500 to-indigo-400 text-white self-end" : "bg-gradient-to-br from-yellow-200 via-yellow-100 to-white text-gray-900 self-start"}`}
                   style={{ wordBreak: 'break-word', textAlign: 'left', boxShadow: '0 4px 24px 0 rgba(80,80,180,0.10)' }}>
-                  {msg.content}
+                  {msg.role === "assistant" ? cleanMarkdown(msg.content) : msg.content}
                 </div>
                 <div className="absolute -right-10 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button

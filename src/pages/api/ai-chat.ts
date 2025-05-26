@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+const apiKey = process.env.OPENROUTER_API_KEY;
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { messages } = req.body;
@@ -10,10 +12,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer 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`,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'openrouter/auto',
+        model: 'deepseek/deepseek-prover-v2:free',
         messages: [
           { role: 'system', content: 'Sen bir psikolojik destek ve motivasyon asistanısın. Kullanıcıya empatik, motive edici, pozitif ve kısa cevaplar ver. Gerekirse öneri ve tavsiye de sun.' },
           ...messages,
@@ -24,10 +26,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     const data = await apiRes.json();
     console.log("OpenRouter yanıtı:", data);
+    if (data.error) {
+      return res.status(500).json({ error: data.error.message || 'OpenRouter API hatası' });
+    }
     const reply = data.choices?.[0]?.message?.content || 'Bir hata oluştu.';
     res.status(200).json({ reply });
   } catch (e) {
     console.error("OpenRouter API hatası:", e);
-    res.status(500).json({ error: 'OpenRouter API hatası' });
+    res.status(500).json({ error: e instanceof Error ? e.message : 'OpenRouter API hatası' });
   }
 } 

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { motion } from "framer-motion";
+import { User } from "firebase/auth";
 
 const DEFAULT_AFFIRMATIONS = [
   "Bugün kendime değer vereceğim.",
@@ -15,8 +16,9 @@ const DEFAULT_AFFIRMATIONS = [
 ];
 
 export default function AffirmationsPage() {
-  const [user, setUser] = useState<any>(null);
-  const [affirmations, setAffirmations] = useState<any[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  type Affirmation = { id: string; text: string; createdAt: string; favorite: boolean };
+  const [affirmations, setAffirmations] = useState<Affirmation[]>([]);
   const [newAffirmation, setNewAffirmation] = useState("");
   const [loading, setLoading] = useState(true);
   const [favLoading, setFavLoading] = useState("");
@@ -45,10 +47,15 @@ export default function AffirmationsPage() {
     try {
       const q = query(collection(db, "affirmations"), where("userId", "==", uid));
       const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        text: doc.data().text || "",
+        createdAt: doc.data().createdAt || "",
+        favorite: doc.data().favorite || false
+      }));
       setAffirmations(data);
     } catch (e) {
-      setAffirmations([]);
+      setAffirmations([] as Affirmation[]);
     } finally {
       setLoading(false);
     }
@@ -74,12 +81,14 @@ export default function AffirmationsPage() {
 
   const handleToggleFavorite = async (id: string, current: boolean) => {
     setFavLoading(id);
+    if (!user) return;
     await updateDoc(doc(db, "affirmations", id), { favorite: !current });
     await fetchAffirmations(user.uid);
     setFavLoading("");
   };
 
   const handleDelete = async (id: string) => {
+    if (!user) return;
     await deleteDoc(doc(db, "affirmations", id));
     await fetchAffirmations(user.uid);
   };
@@ -100,7 +109,7 @@ export default function AffirmationsPage() {
           <div className="text-2xl">🗓️</div>
           <div className="text-lg font-semibold text-indigo-700 text-center">Günün Telkini</div>
           <div className="text-center text-gray-800 text-xl font-bold bg-indigo-50 rounded-lg px-4 py-3 mt-2 shadow">
-            {todaysAffirmation?.text || todaysAffirmation}
+            {typeof todaysAffirmation === "string" ? todaysAffirmation : todaysAffirmation.text}
           </div>
         </div>
         {/* Telkin Ekle */}

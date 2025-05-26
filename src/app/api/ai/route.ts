@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const apiKey = process.env.OPENROUTER_API_KEY;
+
 export async function POST(req: NextRequest) {
   const { prompt } = await req.json();
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": "Bearer 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",
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({

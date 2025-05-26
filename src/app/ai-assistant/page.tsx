@@ -2,11 +2,12 @@
 import { useState, useRef, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
 import { collection, addDoc, query, where, getDocs, orderBy, updateDoc, doc, deleteDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { User } from "firebase/auth";
 
 interface Chat {
   id: string;
   title: string;
-  createdAt: any;
+  createdAt: Date | null;
   isFavorite: boolean;
 }
 
@@ -14,12 +15,12 @@ interface Message {
   id?: string;
   role: "user" | "assistant";
   content: string;
-  createdAt?: any;
+  createdAt?: Date | null;
   isFavorite?: boolean;
 }
 
 export default function AiAssistantPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -45,7 +46,7 @@ export default function AiAssistantPage() {
   const fetchChats = async (uid: string) => {
     const q = query(collection(db, "chats"), where("userId", "==", uid), orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Chat[];
+    const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : null })) as Chat[];
     setChats(data);
     if (data.length > 0 && !selectedChat) {
       setSelectedChat(data[0]);
@@ -56,7 +57,7 @@ export default function AiAssistantPage() {
     if (!selectedChat) return;
     const q = query(collection(db, "chats", selectedChat.id, "messages"), orderBy("createdAt", "asc"));
     const unsub = onSnapshot(q, (querySnapshot) => {
-      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Message[];
+      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), createdAt: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : null })) as Message[];
       setMessages(data);
     });
     return () => unsub();
@@ -77,7 +78,7 @@ export default function AiAssistantPage() {
       isFavorite: false,
     });
     await fetchChats(user.uid);
-    setSelectedChat({ id: newChat.id, title: "Yeni Sohbet", createdAt: new Date(), isFavorite: false });
+    setSelectedChat({ id: newChat.id, title: "Yeni Sohbet", createdAt: null, isFavorite: false });
   };
 
   const sendMessage = async () => {
@@ -102,7 +103,7 @@ export default function AiAssistantPage() {
         body: JSON.stringify({ messages: [...messages, { role: "user", content: input }] })
       });
       const data = await res.json();
-      let asstContent = data.reply || "Bir hata oluştu.";
+      const asstContent = data.reply || "Bir hata oluştu.";
       await addDoc(collection(db, "chats", selectedChat.id, "messages"), {
         role: "assistant",
         content: asstContent,
@@ -110,14 +111,14 @@ export default function AiAssistantPage() {
         isFavorite: false,
       });
       setInput("");
-    } catch (e: any) {
-      setError(e.message || "İstek sırasında hata oluştu.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "İstek sırasında hata oluştu.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -206,18 +207,19 @@ export default function AiAssistantPage() {
           {messages.map((msg, i) => (
             <div key={msg.id || i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}> 
               <div className={`relative flex items-center group`}>
-                <div className={`rounded-2xl px-5 py-3 max-w-[80vw] md:max-w-[60%] whitespace-pre-line shadow-lg text-base flex items-center gap-3 font-medium ${msg.role === "user" ? "bg-gradient-to-r from-indigo-500 to-indigo-400 text-white self-end" : "bg-gradient-to-r from-yellow-200 to-yellow-100 text-gray-900 self-start"}`}> 
+                <div className={`rounded-2xl px-5 py-3 w-fit min-w-[120px] max-w-[80vw] md:max-w-[60%] shadow-xl text-base font-semibold break-words ${msg.role === "user" ? "bg-gradient-to-br from-indigo-500 via-blue-500 to-indigo-400 text-white self-end" : "bg-gradient-to-br from-yellow-200 via-yellow-100 to-white text-gray-900 self-start"}`}
+                  style={{ wordBreak: 'break-word', textAlign: 'left', boxShadow: '0 4px 24px 0 rgba(80,80,180,0.10)' }}>
                   {msg.content}
                 </div>
                 <div className="absolute -right-10 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    className={`text-xl ${msg.isFavorite ? "text-yellow-500" : "text-gray-400"} hover:scale-125 transition-all`}
+                    className={`text-xl ${msg.isFavorite ? "text-yellow-500" : "text-gray-400"} hover:scale-125 transition-all focus:outline-none focus:ring-2 focus:ring-yellow-400`}
                     title={msg.isFavorite ? "Favorilerden çıkar" : "Favorile"}
                     disabled={favMsgLoading === msg.id}
                     onClick={() => handleToggleFavoriteMsg(msg.id!, !!msg.isFavorite)}
                   >★</button>
                   <button
-                    className="text-red-400 hover:text-red-600 text-xl hover:scale-125 transition-all"
+                    className="text-red-400 hover:text-red-600 text-xl hover:scale-125 transition-all focus:outline-none focus:ring-2 focus:ring-red-400"
                     title="Sil"
                     disabled={delMsgLoading === msg.id}
                     onClick={() => handleDeleteMsg(msg.id!)}
@@ -251,7 +253,7 @@ export default function AiAssistantPage() {
           <button
             onClick={sendMessage}
             disabled={loading || !input.trim() || !selectedChat}
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-yellow-400 to-yellow-300 text-white font-bold text-lg shadow hover:from-yellow-500 hover:to-yellow-400 transition-all disabled:opacity-50 hover:scale-105"
+            className="px-6 py-3 rounded-xl bg-gradient-to-r from-yellow-400 to-yellow-300 text-white font-bold text-lg shadow hover:from-yellow-500 hover:to-yellow-400 transition-all disabled:opacity-50 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-yellow-400"
           >
             Gönder
           </button>
